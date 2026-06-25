@@ -31,6 +31,11 @@ def copy(src: Path, dst: Path) -> None:
     shutil.copy2(src, dst)
 
 
+def slice_png(src: Path, dst: Path, box: tuple[int, int, int, int]) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    Image.open(src).convert("RGBA").crop(box).save(dst)
+
+
 def unpack(rar: str) -> None:
     subprocess.run(["bsdtar", "-xf", str(DOWNLOADS / rar), "-C", str(TMP)], check=True)
 
@@ -141,17 +146,49 @@ def main() -> None:
     copy(high_forest_source / "Trees" / "Background.png", HIGH_FOREST / "tree-background.png")
     for name in ("Green-Tree.png", "Dark-Tree.png", "Golden-Tree.png", "Red-Tree.png", "Yellow-Tree.png"):
         copy(high_forest_source / "Trees" / name, HIGH_FOREST / name.lower().replace("-tree", "-tree"))
-    for name in ("Tiles.png", "Tree-Assets.png", "Props-Rocks.png", "Buildings.png", "Hive.png"):
+    copy(high_forest_source / "Assets" / "forest.png", HIGH_FOREST / "tiles.png")
+    for name in ("Tree-Assets.png", "Props-Rocks.png", "Buildings.png", "Hive.png"):
         copy(high_forest_source / "Assets" / name, HIGH_FOREST / name.lower())
     copy(high_forest_source / "HUD" / "Base-01.png", UI / "highforest-hud.png")
+    hud_source = UI / "highforest-hud.png"
+    hud_slices = {
+        "hud-panel-parchment.png": (0, 0, 64, 64),
+        "hud-panel-strip-v.png": (64, 0, 80, 64),
+        "hud-panel-strip-h.png": (0, 64, 64, 80),
+        "hud-meter-red.png": (304, 0, 368, 16),
+        "hud-meter-blue.png": (304, 48, 368, 64),
+        "hud-meter-green.png": (304, 96, 368, 112),
+        "hud-meter-gold.png": (304, 144, 368, 160),
+        "hud-meter-brown.png": (304, 192, 368, 208),
+        "hud-button-red.png": (240, 8, 304, 40),
+        "hud-button-blue.png": (240, 56, 304, 88),
+        "hud-button-green.png": (240, 104, 304, 136),
+        "hud-button-gold.png": (240, 152, 304, 184),
+        "hud-button-brown.png": (240, 200, 304, 232),
+        "hud-board.png": (16, 224, 80, 288),
+        "hud-chip-brown.png": (92, 12, 116, 36),
+        "hud-chip-green.png": (92, 60, 116, 84),
+        "hud-chip-blue.png": (92, 108, 116, 132),
+        "hud-chip-gold.png": (92, 156, 116, 180),
+        "hud-chip-gray.png": (92, 204, 116, 228),
+        "hud-icon-diamond-gold.png": (136, 152, 168, 184),
+        "hud-icon-diamond-blue.png": (136, 104, 168, 136),
+        "hud-icon-diamond-green.png": (136, 56, 168, 88),
+        "hud-icon-round-gold.png": (184, 152, 216, 184),
+        "hud-icon-round-blue.png": (184, 104, 216, 136),
+        "hud-icon-round-green.png": (184, 56, 216, 88),
+    }
+    for filename, box in hud_slices.items():
+        slice_png(hud_source, UI / filename, box)
     forest_lite_bg = DOWNLOADS / "forest_tileset_lite" / "Sprites" / "Background"
     for name in ("sky_cloud.png", "cloud.png", "mountain2.png", "pine1.png", "pine2.png"):
         copy(forest_lite_bg / name, HIGH_FOREST / f"lite-{name}")
 
     # Pre-Tower cemetery pack: Blackbriar/Satyr gate and first tower grind map.
     pre_tower_source = DOWNLOADS / "Pre-Tower Mob Grind Map"
-    for name in ("Background_0.png", "Background_1.png", "Grass_background_1.png", "Grass_background_2.png", "Tiles.png", "brush.png", "Salt.png"):
+    for name in ("Background_0.png", "Background_1.png", "Grass_background_1.png", "Grass_background_2.png", "brush.png", "Salt.png"):
         copy(pre_tower_source / name, PRE_TOWER / name.lower().replace("_", "-"))
+    copy(pre_tower_source / "graveyard.png", PRE_TOWER / "tiles.png")
 
     # Boss/enemy source and normalized runtime sheets. Runtime sheets use 64x64 fixed slots.
     satyr_sheet = DOWNLOADS / "SATYR_sprite_sheet " / "SPRITE_SHEET.png"
