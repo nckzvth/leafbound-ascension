@@ -18,8 +18,11 @@ BOSSES = ROOT / "assets" / "bosses"
 FX = ROOT / "assets" / "fx"
 DARK_FOREST = ROOT / "assets" / "backgrounds" / "darkforest"
 TOWER = ROOT / "assets" / "backgrounds" / "tower"
+HIGH_FOREST = ROOT / "assets" / "backgrounds" / "highforest"
+PRE_TOWER = ROOT / "assets" / "backgrounds" / "pretower"
+UI = ROOT / "assets" / "ui"
 
-for directory in (RUNTIME, PREVIEWS, BOSSES, FX, DARK_FOREST, TOWER, TMP):
+for directory in (RUNTIME, PREVIEWS, BOSSES, FX, DARK_FOREST, TOWER, HIGH_FOREST, PRE_TOWER, UI, TMP):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -132,6 +135,24 @@ def main() -> None:
         for index in range(1, 5):
             copy(DOWNLOADS / "PixelPlatformerSet2v" / "Anim" / f"torch{series}{index}.png", TOWER / f"torch-{series.lower()}-{index}.png")
 
+    # High Forest 16x16 pack: first two mob-grind maps and HUD skin.
+    high_forest_source = DOWNLOADS / "Legacy-Fantasy - High Forest 2.3"
+    copy(high_forest_source / "Background" / "Background.png", HIGH_FOREST / "background.png")
+    copy(high_forest_source / "Trees" / "Background.png", HIGH_FOREST / "tree-background.png")
+    for name in ("Green-Tree.png", "Dark-Tree.png", "Golden-Tree.png", "Red-Tree.png", "Yellow-Tree.png"):
+        copy(high_forest_source / "Trees" / name, HIGH_FOREST / name.lower().replace("-tree", "-tree"))
+    for name in ("Tiles.png", "Tree-Assets.png", "Props-Rocks.png", "Buildings.png", "Hive.png"):
+        copy(high_forest_source / "Assets" / name, HIGH_FOREST / name.lower())
+    copy(high_forest_source / "HUD" / "Base-01.png", UI / "highforest-hud.png")
+    forest_lite_bg = DOWNLOADS / "forest_tileset_lite" / "Sprites" / "Background"
+    for name in ("sky_cloud.png", "cloud.png", "mountain2.png", "pine1.png", "pine2.png"):
+        copy(forest_lite_bg / name, HIGH_FOREST / f"lite-{name}")
+
+    # Pre-Tower cemetery pack: Blackbriar/Satyr gate and first tower grind map.
+    pre_tower_source = DOWNLOADS / "Pre-Tower Mob Grind Map"
+    for name in ("Background_0.png", "Background_1.png", "Grass_background_1.png", "Grass_background_2.png", "Tiles.png", "brush.png", "Salt.png"):
+        copy(pre_tower_source / name, PRE_TOWER / name.lower().replace("_", "-"))
+
     # Boss/enemy source and normalized runtime sheets. Runtime sheets use 64x64 fixed slots.
     satyr_sheet = DOWNLOADS / "SATYR_sprite_sheet " / "SPRITE_SHEET.png"
     copy(satyr_sheet, BOSSES / "satyr-source.png")
@@ -167,6 +188,30 @@ def main() -> None:
         48,
         [[(0, column) for column in range(8)]],
         ["walk"],
+    )
+    save_rows(
+        high_forest_source / "Mob" / "Snail" / "walk-Sheet.png",
+        RUNTIME / "enemy-forest-snail.png",
+        48,
+        32,
+        [[(0, column) for column in range(8)]],
+        ["walk"],
+    )
+    save_rows(
+        high_forest_source / "Mob" / "Boar" / "Walk" / "Walk-Base-Sheet.png",
+        RUNTIME / "enemy-forest-boar.png",
+        48,
+        32,
+        [[(0, column) for column in range(6)]],
+        ["walk"],
+    )
+    save_rows(
+        high_forest_source / "Mob" / "Small Bee" / "Fly" / "Fly-Sheet.png",
+        RUNTIME / "enemy-forest-bee.png",
+        64,
+        64,
+        [[(0, column) for column in range(4)]],
+        ["fly"],
     )
 
     # VFX sheets used by runtime.
