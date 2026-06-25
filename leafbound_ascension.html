@@ -144,60 +144,63 @@
 	  const keys=Object.create(null), input={left:false,right:false,down:false,axisX:0};
   let saves=readSaves(), slot=null, hero=null, mapKey='town', paused=true, last=performance.now(), clock=0, viewW=VIEW_W, camera={x:0}, shake=0, toastTime=0, currentInteract=null, spawnClock=0, muted=false, audioCtx=null;
   let enemies=[],drops=[],projectiles=[],enemyProjectiles=[],effects=[],texts=[];
-	  const forestPlatforms=[
-	    [360,500,420,1],[990,456,300,2],[1460,530,380,1],[2050,414,360,3],[2580,502,460,1],[3260,382,330,3],[3860,508,380,1],[4380,314,420,4],
-	    [620,336,330,4],[1230,294,270,5],[1780,250,410,5],[2440,324,310,4],[3010,252,390,5],[3670,294,300,5],[4210,438,290,2]
-	  ].map(([x,y,w,tier],index)=>({id:`forest-${index}`,x:snap(x,48),y,w:Math.max(144,snap(w,48)),tier,decor:index%3===0}));
-  const forestGroundLanes=[
-    {id:'ground-west',x:180,y:610,w:780,tier:0},
-    {id:'ground-lowlands',x:1056,y:610,w:768,tier:0},
-    {id:'ground-heart',x:1968,y:610,w:768,tier:0},
-    {id:'ground-thicket',x:2880,y:610,w:768,tier:0},
-    {id:'ground-east',x:3792,y:610,w:1056,tier:0}
-  ];
-	  const highlandPlatforms=[
-	    [320,510,410,1],[890,438,360,2],[1340,350,300,3],[1830,500,430,1],[2380,418,360,2],[2880,332,430,4],[3440,486,360,1],[3820,266,330,5],
-	    [520,292,360,4],[1120,246,320,5],[1720,274,380,5],[2260,230,330,5],[3100,216,420,5]
-	  ].map(([x,y,w,tier],index)=>({id:`highland-${index}`,x:snap(x,48),y,w:Math.max(144,snap(w,48)),tier,decor:index%2===0}));
-  const highlandGroundLanes=[
-    {id:'high-ground-west',x:180,y:610,w:720,tier:0},{id:'high-ground-midwest',x:1008,y:610,w:720,tier:0},
-    {id:'high-ground-center',x:1824,y:610,w:720,tier:0},{id:'high-ground-mideast',x:2640,y:610,w:720,tier:0},
-    {id:'high-ground-east',x:3456,y:610,w:624,tier:0}
-  ];
-	  const towerGatePlatforms=[
-	    [390,470,360,1,'earth'],[900,448,420,2,'stone'],[1370,390,560,3,'stone'],[2110,468,410,1,'earth'],[2670,456,380,2,'stone'],[3160,374,520,4,'stone'],[3820,470,360,1,'earth'],
-	    [610,312,360,4,'stone'],[1210,250,400,5,'stone'],[2010,302,360,4,'earth'],[2660,238,420,5,'stone'],[3500,290,380,5,'stone']
-	  ].map(([x,y,w,tier,style],index)=>({id:`towergate-${index}`,x:snap(x,64),y,w:Math.max(192,snap(w,64)),tier,style,decor:index%3===0}));
-  const towerGateGroundLanes=[
-    {id:'towergate-ground-west',x:160,y:610,w:800,tier:0},{id:'towergate-ground-midwest',x:1070,y:610,w:760,tier:0},
-    {id:'towergate-ground-center',x:1960,y:610,w:760,tier:0},{id:'towergate-ground-mideast',x:2850,y:610,w:760,tier:0},
-    {id:'towergate-ground-east',x:3740,y:610,w:720,tier:0}
-  ];
-	  const towerPlatforms=[
-	    [310,466,380,1,'earth'],[840,430,560,2,'stone'],[1510,470,390,1,'earth'],[2070,374,560,4,'stone'],[2780,462,440,1,'earth'],[3240,292,360,5,'stone'],
-	    [520,302,360,4,'stone'],[1220,236,420,5,'stone'],[1840,270,350,5,'earth'],[2580,224,430,5,'stone']
-	  ].map(([x,y,w,tier,style],index)=>({id:`tower-${index}`,x:snap(x,64),y,w:Math.max(192,snap(w,64)),tier,style,decor:index%2===1}));
-  const towerGroundLanes=[
-    {id:'tower-ground-west',x:150,y:610,w:760,tier:0},{id:'tower-ground-midwest',x:1040,y:610,w:720,tier:0},
-    {id:'tower-ground-center',x:1920,y:610,w:720,tier:0},{id:'tower-ground-east',x:2800,y:610,w:760,tier:0}
-  ];
+  function buildLevelMask(prefix,tile,width,segments){
+    const platforms=[],groundSurfaces=[],spawnZones=[],hazards=[];
+    segments.forEach((seg,index)=>{
+      const kind=seg.kind||'solid';
+      const x=snap(seg.x||0,tile),w=Math.max(tile*2,snap(seg.w||tile*3,tile)),y=seg.y;
+      if(kind==='hazard'){hazards.push({x,y,w,h:seg.h||32,kind:seg.hazard||seg.type,phase:seg.phase||0});return}
+      const surface={id:`${prefix}-${kind}-${index}`,x,y,w,h:Math.max(tile,seg.h||tile*2),tier:seg.tier??Math.max(0,Math.round((610-y)/84)),style:seg.style||'earth',mask:true,ground:kind==='ground',oneWay:kind==='oneway',decor:!!seg.decor};
+      if(kind==='ground'){groundSurfaces.push(surface);if(seg.spawn!==false)spawnZones.push(surface)}
+      else if(kind==='solid'||kind==='oneway')platforms.push(surface);
+    });
+    return {width,platforms,groundSurfaces,spawnZones,hazards,masked:true}
+  }
+  const forestMask=buildLevelMask('forest',64,5000,[
+    {kind:'ground',x:0,y:612,w:900,h:220},{kind:'ground',x:1088,y:612,w:832,h:220},{kind:'ground',x:2112,y:612,w:832,h:220},{kind:'ground',x:3136,y:612,w:768,h:220},{kind:'ground',x:4160,y:612,w:840,h:220},
+    {kind:'solid',x:512,y:500,w:512,h:160,tier:1,decor:true},{kind:'solid',x:1216,y:452,w:448,h:192,tier:2},{kind:'solid',x:1856,y:392,w:512,h:224,tier:3,decor:true},{kind:'solid',x:2560,y:500,w:576,h:160,tier:1},{kind:'solid',x:3328,y:440,w:512,h:192,tier:2},{kind:'solid',x:4096,y:500,w:512,h:160,tier:1},
+    {kind:'solid',x:704,y:308,w:512,h:160,tier:4},{kind:'oneway',x:1344,y:320,w:448,h:64,tier:4,style:'bridge'},{kind:'solid',x:1984,y:256,w:512,h:160,tier:5},{kind:'solid',x:2752,y:300,w:512,h:160,tier:4},{kind:'oneway',x:3456,y:288,w:448,h:64,tier:5,style:'bridge'},{kind:'solid',x:4096,y:256,w:576,h:176,tier:5},
+    {kind:'hazard',x:1536,y:580,w:128,h:30},{kind:'hazard',x:2688,y:580,w:128,h:30},{kind:'hazard',x:3776,y:580,w:128,h:30}
+  ]);
+  const highlandMask=buildLevelMask('highland',64,4200,[
+    {kind:'ground',x:0,y:612,w:768,h:220},{kind:'ground',x:960,y:612,w:768,h:220},{kind:'ground',x:1888,y:612,w:832,h:220},{kind:'ground',x:2912,y:612,w:640,h:220},{kind:'ground',x:3744,y:612,w:456,h:220},
+    {kind:'solid',x:384,y:500,w:448,h:160,tier:1},{kind:'solid',x:1024,y:432,w:512,h:192,tier:2,decor:true},{kind:'solid',x:1664,y:348,w:448,h:224,tier:3},{kind:'solid',x:2240,y:492,w:576,h:160,tier:1},{kind:'solid',x:2944,y:396,w:512,h:192,tier:3},{kind:'solid',x:3584,y:476,w:448,h:160,tier:1},
+    {kind:'solid',x:512,y:280,w:512,h:160,tier:5},{kind:'oneway',x:1216,y:284,w:448,h:64,tier:5,style:'bridge'},{kind:'solid',x:1856,y:248,w:512,h:176,tier:5},{kind:'solid',x:2688,y:260,w:576,h:176,tier:5},{kind:'oneway',x:3392,y:264,w:384,h:64,tier:5,style:'bridge'},
+    {kind:'hazard',x:1088,y:566,w:96,h:44,hazard:'rune',phase:0},{kind:'hazard',x:2176,y:566,w:96,h:44,hazard:'rune',phase:2.1},{kind:'hazard',x:3264,y:566,w:96,h:44,hazard:'rune',phase:4.2}
+  ]);
+  const towerGateMask=buildLevelMask('towergate',64,4550,[
+    {kind:'ground',x:0,y:612,w:896,h:220,style:'earth'},{kind:'ground',x:1088,y:612,w:768,h:220,style:'earth'},{kind:'ground',x:1984,y:612,w:768,h:220,style:'earth'},{kind:'ground',x:2880,y:612,w:768,h:220,style:'earth'},{kind:'ground',x:3776,y:612,w:774,h:220,style:'earth'},
+    {kind:'solid',x:384,y:468,w:448,h:144,tier:1,style:'earth'},{kind:'solid',x:960,y:420,w:576,h:160,tier:2,style:'stone'},{kind:'solid',x:1664,y:356,w:512,h:192,tier:3,style:'stone'},{kind:'solid',x:2368,y:468,w:512,h:144,tier:1,style:'earth'},{kind:'solid',x:3072,y:380,w:576,h:192,tier:4,style:'stone'},{kind:'solid',x:3840,y:460,w:448,h:144,tier:1,style:'earth'},
+    {kind:'oneway',x:640,y:300,w:448,h:64,tier:4,style:'stone'},{kind:'solid',x:1280,y:244,w:512,h:144,tier:5,style:'stone'},{kind:'solid',x:2176,y:300,w:448,h:144,tier:4,style:'earth'},{kind:'solid',x:2880,y:236,w:512,h:144,tier:5,style:'stone'},{kind:'oneway',x:3584,y:288,w:448,h:64,tier:5,style:'stone'},
+    {kind:'hazard',x:1280,y:578,w:128,h:32},{kind:'hazard',x:2432,y:578,w:128,h:32},{kind:'hazard',x:3520,y:578,w:128,h:32}
+  ]);
+  const towerMask=buildLevelMask('tower',64,3700,[
+    {kind:'ground',x:0,y:612,w:832,h:220,style:'earth'},{kind:'ground',x:1024,y:612,w:768,h:220,style:'earth'},{kind:'ground',x:1920,y:612,w:768,h:220,style:'earth'},{kind:'ground',x:2880,y:612,w:820,h:220,style:'earth'},
+    {kind:'solid',x:320,y:460,w:448,h:160,tier:1,style:'earth'},{kind:'solid',x:896,y:400,w:640,h:176,tier:2,style:'stone'},{kind:'solid',x:1664,y:464,w:448,h:144,tier:1,style:'earth'},{kind:'solid',x:2304,y:356,w:640,h:192,tier:4,style:'stone'},{kind:'solid',x:3072,y:456,w:512,h:160,tier:1,style:'earth'},
+    {kind:'oneway',x:512,y:292,w:448,h:64,tier:4,style:'stone'},{kind:'solid',x:1280,y:228,w:512,h:160,tier:5,style:'stone'},{kind:'solid',x:2048,y:264,w:448,h:160,tier:5,style:'earth'},{kind:'oneway',x:2816,y:220,w:512,h:64,tier:5,style:'stone'},
+    {kind:'hazard',x:1024,y:578,w:128,h:32},{kind:'hazard',x:2048,y:578,w:128,h:32},{kind:'hazard',x:3072,y:578,w:128,h:32}
+  ]);
+  const {platforms:forestPlatforms,groundSurfaces:forestGroundSurfaces,spawnZones:forestGroundLanes,hazards:forestHazards}=forestMask;
+  const {platforms:highlandPlatforms,groundSurfaces:highlandGroundSurfaces,spawnZones:highlandGroundLanes,hazards:highlandHazards}=highlandMask;
+  const {platforms:towerGatePlatforms,groundSurfaces:towerGateGroundSurfaces,spawnZones:towerGateGroundLanes,hazards:towerGateHazards}=towerGateMask;
+  const {platforms:towerPlatforms,groundSurfaces:towerGroundSurfaces,spawnZones:towerGroundLanes,hazards:towerHazards}=towerMask;
   const maps={
     town:{name:'Copperleaf Township',sub:'Vendors, shelter, and roads to adventure',width:3200,spawn:{x:260,y:520},theme:'town',ground:610,
       platforms:[{x:704,y:482,w:128},{x:1120,y:434,w:128},{x:1664,y:498,w:128},{x:2240,y:446,w:128}],hazards:[],
       portals:[{x:3020,y:515,w:70,h:95,to:'forest',label:'Verdant Verge'},{x:75,y:515,w:70,h:95,to:'job',label:'Ascension Grotto'}],
       npcs:[{x:850,y:554,key:'npcHealer',kind:'healer',name:'Mara',title:'Herbalist'},{x:1460,y:554,key:'npcSmith',kind:'smith',name:'Bram',title:'Forgekeeper'},{x:2080,y:554,key:'npcGuide',kind:'guide',name:'Pip',title:'Pathfinder'}]},
 	    forest:{name:'Verdant Verge',sub:'High Forest / Snails, boars, and bees',width:5000,spawn:{x:175,y:520},theme:'highforest',ground:610,grind:true,initialEnemies:46,enemyCap:52,spawnDelay:.8,
-      platforms:forestPlatforms,spawnZones:forestGroundLanes,
-      hazards:[{x:1488,y:578,w:96,h:32},{x:2592,y:578,w:96,h:32},{x:3696,y:578,w:96,h:32}],portals:[{x:55,y:515,w:70,h:95,to:'town',label:'Copperleaf'},{x:4860,y:515,w:70,h:95,to:'highlands',label:'Moonroot Heights'}],npcs:[]},
+      platforms:forestPlatforms,groundSurfaces:forestGroundSurfaces,spawnZones:forestGroundLanes,
+      hazards:forestHazards,portals:[{x:55,y:515,w:70,h:95,to:'town',label:'Copperleaf'},{x:4860,y:515,w:70,h:95,to:'highlands',label:'Moonroot Heights'}],npcs:[]},
 	    highlands:{name:'Moonroot Heights',sub:'High Forest depths / Horned boars and hive swarms',width:4200,spawn:{x:165,y:520},theme:'highforest',variant:'deep',ground:610,grind:true,initialEnemies:24,enemyCap:28,spawnDelay:1.15,mobScale:1.35,
-      platforms:highlandPlatforms,spawnZones:highlandGroundLanes,
-      hazards:[{x:1104,y:566,w:72,h:44,kind:'rune',phase:0},{x:2208,y:566,w:72,h:44,kind:'rune',phase:2.1},{x:3312,y:566,w:72,h:44,kind:'rune',phase:4.2}],
+      platforms:highlandPlatforms,groundSurfaces:highlandGroundSurfaces,spawnZones:highlandGroundLanes,
+      hazards:highlandHazards,
       portals:[{x:55,y:515,w:70,h:95,to:'forest',label:'Verdant Verge'},{x:4075,y:515,w:70,h:95,to:'towergate',label:'Blackbriar Gate'}],npcs:[]},
 	    towergate:{name:'Blackbriar Gate',sub:'Cemetery approach / Find a key, then survive the Satyr',width:4550,spawn:{x:170,y:520},theme:'pretower',ground:610,grind:true,initialEnemies:24,enemyCap:30,spawnDelay:1.05,mobScale:1.75,keyMap:true,
-      platforms:towerGatePlatforms,spawnZones:towerGateGroundLanes,hazards:[{x:1320,y:578,w:96,h:32},{x:2424,y:578,w:96,h:32},{x:3528,y:578,w:96,h:32}],
+      platforms:towerGatePlatforms,groundSurfaces:towerGateGroundSurfaces,spawnZones:towerGateGroundLanes,hazards:towerGateHazards,
       portals:[{x:55,y:515,w:70,h:95,to:'highlands',label:'Moonroot Heights'},{x:4370,y:500,w:95,h:110,to:'tower',label:'Tower Door',requires:'towerUnlocked',locked:'SATYR SEAL'}],npcs:[]},
 	    tower:{name:'Hollowspire Gatehouse',sub:'Tower entrance grind map / Skeleton patrols and mage fire',width:3700,spawn:{x:170,y:520},theme:'pretower',variant:'tower',ground:610,grind:true,initialEnemies:26,enemyCap:32,spawnDelay:.95,mobScale:2.05,
-      platforms:towerPlatforms,spawnZones:towerGroundLanes,hazards:[{x:1008,y:578,w:96,h:32},{x:2016,y:578,w:96,h:32},{x:3024,y:578,w:96,h:32}],portals:[{x:55,y:515,w:70,h:95,to:'towergate',label:'Blackbriar Gate'}],npcs:[]},
+      platforms:towerPlatforms,groundSurfaces:towerGroundSurfaces,spawnZones:towerGroundLanes,hazards:towerHazards,portals:[{x:55,y:515,w:70,h:95,to:'towergate',label:'Blackbriar Gate'}],npcs:[]},
     job:{name:'Ascension Grotto',sub:'Where a calling becomes a discipline',width:2250,spawn:{x:165,y:520},theme:'cave',ground:610,
       platforms:[{x:384,y:480,w:192},{x:720,y:408,w:144},{x:1152,y:480,w:192},{x:1536,y:408,w:192},{x:1920,y:480,w:144}],hazards:[],portals:[{x:55,y:515,w:70,h:95,to:'town',label:'Copperleaf'}],npcs:[{x:1100,y:554,key:'npcMaster',kind:'master',name:'Vale',title:'Job Master'}]}
   };
@@ -238,7 +241,7 @@
   function loadImages(){const entries=Object.entries(assetSources);let done=0;return Promise.all(entries.map(([key,src])=>new Promise(resolve=>{const img=new Image();img.onload=()=>{assets[key]=img;done++;dom.loadFill.style.width=`${done/entries.length*100}%`;dom.loadText.textContent=`Loading field kit ${done} / ${entries.length}`;resolve()};img.onerror=()=>{done++;console.warn('Asset failed',key);resolve()};img.src=src})))}
   function boot(){loadImages().then(()=>{dom.loading.classList.add('hidden');showSelect();requestAnimationFrame(frame)})}
 
-  function transitionMap(to,initial=false,connected=false){const from=mapKey,m=maps[to];let spawn;if(initial&&hero.lastMap===to&&Number.isFinite(hero.x))spawn={x:clamp(hero.x,100,m.width-100),y:clamp(hero.y,100,530)};else if(connected){const entry=m.portals.find(p=>p.to===from);if(entry){const entersFromLeft=entry.x+entry.w/2<m.width/2;spawn={x:entersFromLeft?entry.x+entry.w+55:entry.x-hero.w-55,y:m.ground-hero.h}}}spawn=spawn||m.spawn;mapKey=to;hero.x=clamp(spawn.x,0,m.width-hero.w);hero.y=spawn.y;hero.vx=hero.vy=0;hero.hp=Math.max(1,hero.hp);camera.x=clamp(hero.x-viewW*.35,0,Math.max(0,m.width-viewW));enemies=[];drops=[];projectiles=[];enemyProjectiles=[];effects=[];texts=[];spawnClock=0;if(m.grind)seedGrindMap();if(to==='towergate'&&hero.towerKey&&!hero.towerUnlocked)spawnSatyrBoss(false);saveHero();updateHud();if(!initial)showToast(m.name);sound('portal')}
+  function transitionMap(to,initial=false,connected=false){const from=mapKey,m=maps[to];let spawn;if(initial&&hero.lastMap===to&&Number.isFinite(hero.x))spawn={x:clamp(hero.x,100,m.width-100),y:clamp(hero.y,100,530)};else if(connected){const entry=m.portals.find(p=>p.to===from);if(entry){const entersFromLeft=entry.x+entry.w/2<m.width/2,spawnX=entersFromLeft?entry.x+entry.w+55:entry.x-hero.w-55;spawn={x:spawnX,y:groundYAt(m,spawnX+hero.w/2,m.ground)-hero.h}}}spawn=spawn||m.spawn;mapKey=to;hero.x=clamp(spawn.x,0,m.width-hero.w);hero.y=spawn.y;hero.vx=hero.vy=0;hero.hp=Math.max(1,hero.hp);camera.x=clamp(hero.x-viewW*.35,0,Math.max(0,m.width-viewW));enemies=[];drops=[];projectiles=[];enemyProjectiles=[];effects=[];texts=[];spawnClock=0;if(m.grind)seedGrindMap();if(to==='towergate'&&hero.towerKey&&!hero.towerUnlocked)spawnSatyrBoss(false);saveHero();updateHud();if(!initial)showToast(m.name);sound('portal')}
   function grindSpawnSurfaces(){const m=maps[mapKey];return [...m.spawnZones,...m.platforms]}
   function surfacePopulation(id){return enemies.filter(e=>!e.dead&&e.surfaceId===id).length}
   function chooseSpawnSurface(initial){const surfaces=grindSpawnSurfaces();let candidates=surfaces.filter(s=>surfacePopulation(s.id)<Math.max(1,Math.floor((s.w-32)/150)));if(!candidates.length)return null;if(!initial){const distant=candidates.filter(s=>Math.abs(s.x+s.w/2-(hero.x+hero.w/2))>Math.max(420,viewW*.55));if(distant.length)candidates=distant}const fill=s=>surfacePopulation(s.id)/Math.max(1,Math.floor((s.w-32)/150)),lowest=Math.min(...candidates.map(fill));candidates=candidates.filter(s=>fill(s)<=lowest+.01);return candidates[Math.floor(rand(0,candidates.length))]}
@@ -255,9 +258,9 @@
 	    else type=x>2400&&wardenCount<3&&roll>.94?'skeleton':roll<(x<1600 ? .72 : .5)?'slime':'pig';
 	    const eliteChance=tower ? .18 : gate ? .12 : .16;
 	    const elite=(highland||tower||gate)&&Math.random()<eliteChance,d=enemyDefs[type],mobScale=m.mobScale||1,w=d.w+(elite?8:0),h=d.h+(elite?6:0),patrolMin=surface.x+8,patrolMax=Math.max(surface.x+9,surface.x+surface.w-w-8),maxHp=Math.round(d.hp*mobScale*(elite?1.65:1)),spawnX=clamp(x,patrolMin,patrolMax),floorY=surfaceTopAt(surface,spawnX+w/2,m);
-	    enemies.push({type,elite,x:spawnX,y:floorY-h,w,h,vx:0,dir:Math.random()<.5?-1:1,hp:maxHp,maxHp,attack:Math.round(d.attack*mobScale*(elite?1.25:1)),rewardXp:Math.round(d.xp*mobScale*(elite?1.8:1)),leavesMult:mobScale*(elite?2.2:1),invuln:0,hurt:0,attackCd:rand(.8,1.5),charge:0,dead:false,deadTime:0,anim:rand(0,2),lastHit:-1,surfaceId:surface.id,floorY,patrolMin,patrolMax})
+	    enemies.push({type,elite,x:spawnX,y:floorY-h,w,h,vx:0,dir:Math.random()<.5?-1:1,hp:maxHp,maxHp,attack:Math.round(d.attack*mobScale*(elite?1.25:1)),rewardXp:Math.round(d.xp*mobScale*(elite?1.8:1)),leavesMult:mobScale*(elite?2.2:1),invuln:0,hurt:0,attackCd:rand(.8,1.5),contactCd:0,charge:0,dead:false,deadTime:0,anim:rand(0,2),lastHit:-1,surfaceId:surface.id,floorY,patrolMin,patrolMax})
   }
-  function spawnSatyrBoss(announce=true){if(mapKey!=='towergate'||hero.towerUnlocked||enemies.some(e=>!e.dead&&e.type==='satyr'))return;const m=maps.towergate,d=enemyDefs.satyr,surface=towerGateGroundLanes[3],x=clamp(surface.x+surface.w/2-d.w/2,0,m.width-d.w),maxHp=Math.round(d.hp*(1+Math.max(0,hero.level-24)*.025));enemies.push({type:'satyr',boss:true,elite:false,x,y:surface.y-d.h,w:d.w,h:d.h,vx:0,dir:-1,hp:maxHp,maxHp,attack:d.attack+Math.floor(hero.level*.7),rewardXp:d.xp,leavesMult:1,invuln:0,hurt:0,attackCd:1.4,phaseCd:2.8,action:'idle',actionTime:0,actionMax:0,actionHit:false,dead:false,deadTime:1.35,anim:0,lastHit:-1,surfaceId:surface.id,floorY:surface.y,patrolMin:surface.x+25,patrolMax:surface.x+surface.w-d.w-25});if(announce){showToast('The tower key burns black. SATYR OF BLACKBRIAR has appeared.',4600);shake=12;sound('level')}}
+  function spawnSatyrBoss(announce=true){if(mapKey!=='towergate'||hero.towerUnlocked||enemies.some(e=>!e.dead&&e.type==='satyr'))return;const m=maps.towergate,d=enemyDefs.satyr,surface=towerGateGroundLanes[3],x=clamp(surface.x+surface.w/2-d.w/2,0,m.width-d.w),floorY=surfaceTopAt(surface,x+d.w/2,m),maxHp=Math.round(d.hp*(1+Math.max(0,hero.level-24)*.025));enemies.push({type:'satyr',boss:true,elite:false,x,y:floorY-d.h,w:d.w,h:d.h,vx:0,dir:-1,hp:maxHp,maxHp,attack:d.attack+Math.floor(hero.level*.7),rewardXp:d.xp,leavesMult:1,invuln:0,hurt:0,attackCd:1.4,contactCd:0,phaseCd:2.8,action:'idle',actionTime:0,actionMax:0,actionHit:false,dead:false,deadTime:1.35,anim:0,lastHit:-1,surfaceId:surface.id,floorY,patrolMin:surface.x+25,patrolMax:surface.x+surface.w-d.w-25});if(announce){showToast('The tower key burns black. SATYR OF BLACKBRIAR has appeared.',4600);shake=12;sound('level')}}
   function usePotion(kind){if(!hero||paused)return;if(kind==='red'){if(hero.red<=0)return showToast('No Bloom Tonics.');if(hero.hp>=maxHp())return showToast('HP is already full.');hero.red--;hero.hp=Math.min(maxHp(),hero.hp+Math.floor(maxHp()*.5));showToast('Bloom Tonic restored HP.');sound('heal');addEffect(hero.x+hero.w/2,hero.y+20,3);addSheetEffect('healSpark',hero.x+hero.w/2-72,hero.y-70,144,144,.85)}else{if(hero.blue<=0)return showToast('No Moondew.');if(hero.mp>=maxMp())return showToast('MP is already full.');hero.blue--;hero.mp=Math.min(maxMp(),hero.mp+Math.floor(maxMp()*.55));showToast('Moondew restored MP.');sound('heal');addEffect(hero.x+hero.w/2,hero.y+20,2);addSheetEffect('healSpark',hero.x+hero.w/2-62,hero.y-58,124,124,.7)}updateHud();saveHero()}
   function launchProjectile(q){projectiles.push({...q,originX:q.x,originY:q.y,distance:0,life:q.life??1.5,range:q.range??700,homeRadius:q.homeRadius??240,turnRate:q.turnRate??7})}
   function attemptAttack(){if(!hero||paused||hero.attackTimer>0||hero.dashTimer>0)return;hero.combo=hero.comboWindow>0?(hero.combo%3)+1:1;hero.comboWindow=.42;hero.attackDuration=hero.combo===3 ? .41 : .31;hero.attackTimer=hero.attackDuration;hero.attackHit=false;sound('swing');if(isRanged()){const magic=['Arcanist','Starcaller'].includes(hero.job),falcon=hero.job==='Falconer',star=hero.job==='Starcaller',cost=magic?3:0;if(hero.mp<cost){hero.attackTimer=0;showToast('Not enough MP.');return}hero.mp-=cost;launchProjectile({x:hero.x+hero.w/2+hero.facing*24,y:hero.y+34,vx:hero.facing*(magic?590:720),vy:0,w:magic?20:28,h:magic?20:14,damage:power()*(magic?1.1:1),magic,falcon,star,pierce:magic||falcon?1:0,range:falcon?780:magic?640:720,homeRadius:falcon?310:magic?280:250,turnRate:falcon?9:magic?9:7});updateHud()}}
@@ -301,18 +304,20 @@
 	  function hazardActive(h){return h.kind!=='rune'||Math.sin(clock*3+h.phase)>.12}
 	  const alphaTopCache=new Map();
 	  function atlasTopOffset(key,sx,sy,sw,sh,dw,dh,localX){const img=assets[key];if(!img)return 0;const cacheKey=[key,sx,sy,sw,sh,dw,dh].join(':');let profile=alphaTopCache.get(cacheKey);if(!profile){const off=document.createElement('canvas');off.width=sw;off.height=sh;const octx=off.getContext('2d',{willReadFrequently:true});octx.imageSmoothingEnabled=false;octx.drawImage(img,sx,sy,sw,sh,0,0,sw,sh);const data=octx.getImageData(0,0,sw,sh).data;profile=[];for(let dx=0;dx<dw;dx++){const srcX=clamp(Math.floor(dx/dw*sw),0,sw-1);let top=0;for(let y=0;y<sh;y++){if(data[(y*sw+srcX)*4+3]>24){top=Math.round(y/sh*dh);break}}profile[dx]=top}alphaTopCache.set(cacheKey,profile)}return profile[clamp(Math.floor(localX),0,dw-1)]||0}
-	  function hfTopCell(cell,last){return cell===0?0:last?64:[16,32,48][cell%3]}
+	  function hfTileSourceX(cell,hasRight){return cell===0?0:hasRight?20:40}
 	  function ptEarthCell(cell,last){return cell===0?128:last?288:[160,192,224,256][cell%4]}
 	  function ptStoneCell(cell,last){return cell===0?64:last?160:96}
 	  function surfaceTopAt(s,x,m=maps[mapKey]){
 	    if(s.ground){
-	      if(m.theme==='pretower')return m.ground+atlasTopOffset('preTowerTiles',160,96,32,32,64,64,((x%64)+64)%64)+6;
-	      if(m.theme==='highforest')return m.ground+atlasTopOffset('highForestTiles',16,0,16,16,48,48,((x%48)+48)%48)+5;
-	      return s.y;
+	      const base=s.y??m.ground;
+	      if(m.theme==='pretower')return base+atlasTopOffset('preTowerTiles',160,96,32,32,64,64,((x-s.x)%64+64)%64)+6;
+	      if(m.theme==='highforest')return base+atlasTopOffset('highForestTiles',hfTileSourceX(Math.floor(((x-s.x)%128+128)%128/64),true),0,40,40,64,64,((x-s.x)%64+64)%64)+5;
+	      return base;
 	    }
 	    if(m.theme==='highforest'){
-	      const local=clamp(x-s.x,0,Math.max(0,s.w-1)),cell=Math.floor(local/48),cellX=local-cell*48,last=cell>=Math.floor((s.w-1)/48);
-	      return s.y+atlasTopOffset('highForestTiles',hfTopCell(cell,last),0,16,16,48,48,cellX)+2;
+	      if(s.oneWay)return s.y+13;
+	      const local=clamp(x-s.x,0,Math.max(0,s.w-1)),cell=Math.floor(local/64),cellX=local-cell*64,hasRight=(cell+1)*64<s.w;
+	      return s.y+atlasTopOffset('highForestTiles',hfTileSourceX(cell,hasRight),0,40,40,64,64,cellX)+2;
 	    }
 	    if(m.theme==='pretower'){
 	      const local=clamp(x-s.x,0,Math.max(0,s.w-1)),cell=Math.floor(local/64),cellX=local-cell*64,last=cell>=Math.floor((s.w-1)/64);
@@ -321,7 +326,10 @@
 	    }
 	    return s.y;
 	  }
-	  function surfaceById(id){const m=maps[mapKey];return id==='ground'?{id:'ground',x:0,y:m.ground,w:m.width,ground:true}:m.platforms.find(p=>p.id===id)}
+	  function groundSurfaces(m){return m.groundSurfaces?.length?m.groundSurfaces:[{id:'ground',x:0,y:m.ground,w:m.width,ground:true}]}
+	  function collisionSurfaces(m,includePlatforms=true){return [...(includePlatforms?m.platforms:[]),...groundSurfaces(m)]}
+	  function groundYAt(m,x,fallback=m.ground){const surface=groundSurfaces(m).find(s=>x>=s.x&&x<=s.x+s.w);return surface?surfaceTopAt(surface,x,m):fallback}
+	  function surfaceById(id){const m=maps[mapKey];return [...(m.platforms||[]),...(m.spawnZones||[]),...groundSurfaces(m)].find(p=>p.id===id)||null}
 	  function updatePlayer(dt){
 	    const p=hero,m=maps[mapKey];
     p.anim+=dt;p.coyote=Math.max(0,p.coyote-dt);p.jumpBuffer=Math.max(0,p.jumpBuffer-dt);p.dropTimer=Math.max(0,p.dropTimer-dt);p.invuln=Math.max(0,p.invuln-dt);p.hurt=Math.max(0,p.hurt-dt);p.skillCd=Math.max(0,p.skillCd-dt);p.dashCd=Math.max(0,p.dashCd-dt);p.comboWindow=Math.max(0,p.comboWindow-dt);
@@ -330,7 +338,7 @@
     if(p.jumpBuffer>0&&(p.onGround||p.coyote>0)){p.vy=-620;p.onGround=false;p.onPlatform=false;p.coyote=0;p.jumpBuffer=0;sound('jump')}
     else if(p.jumpBuffer>0&&!p.onGround&&['Ranger','Falconer'].includes(p.job)&&!p.doubleJump){p.vy=-560;p.doubleJump=true;p.jumpBuffer=0;addEffect(p.x+p.w/2,p.y+30,3,.35);sound('jump')}
     p.vy+=GRAVITY*dt;p.x=clamp(p.x+p.vx*dt,0,m.width-p.w);const oldBottom=p.y+p.h;p.y+=p.vy*dt;p.onGround=false;p.onPlatform=false;
-	    const ground={id:'ground',x:0,y:m.ground,w:m.width,ground:true},surfaces=[...(p.dropTimer>0?[]:m.platforms),ground].sort((a,b)=>a.y-b.y);
+	    const surfaces=collisionSurfaces(m,p.dropTimer<=0).sort((a,b)=>a.y-b.y);
 	    if(p.vy>=0)for(const s of surfaces){const footX=p.x+p.w/2,top=surfaceTopAt(s,footX,m);if(footX>s.x+7&&footX<s.x+s.w-7&&oldBottom<=top+9&&p.y+p.h>=top){p.y=top-p.h;p.vy=0;p.onGround=true;p.onPlatform=!s.ground;p.coyote=.1;p.doubleJump=false;break}}
     if(p.y>VIEW_H+120){p.hp=Math.max(1,p.hp-Math.floor(maxHp()*.15));transitionMap(mapKey);showToast('The roots returned you to the path.')}
     if(p.attackTimer>0){p.attackTimer-=dt;const elapsed=p.attackDuration-p.attackTimer;if(!p.attackHit&&elapsed>p.attackDuration*.42){p.attackHit=true;if(!isRanged())meleeStrike()}}
@@ -359,7 +367,7 @@
       e.anim+=dt;e.invuln=Math.max(0,e.invuln-dt);e.hurt=Math.max(0,e.hurt-dt);
       if(e.dead){e.deadTime-=dt;if(e.deadTime<=0)enemies.splice(i,1);continue}
       if(e.type==='satyr'){updateSatyr(e,dt,d);continue}
-      e.attackCd-=dt;
+      e.attackCd-=dt;e.contactCd=Math.max(0,(e.contactCd||0)-dt);
       const dx=hero.x+hero.w/2-(e.x+e.w/2),dy=hero.y+hero.h/2-(e.y+e.h/2),ad=Math.abs(dx),sameTier=Math.abs(hero.y+hero.h-e.floorY)<68,heroInLane=hero.x+hero.w/2>e.patrolMin-90&&hero.x+hero.w/2<e.patrolMax+e.w+90;
 	      if((e.type==='pig'||e.type==='forestBoar'||e.type==='orc'||e.type==='towerWarrior')&&sameTier&&heroInLane&&ad<(e.type==='orc'||e.type==='towerWarrior'?330:300)&&e.attackCd<=0){e.charge=e.type==='orc'||e.type==='towerWarrior' ? .48 : .72;e.chargeSpeed=e.type==='orc'||e.type==='towerWarrior'?290:245;e.attackCd=e.type==='orc'||e.type==='towerWarrior'?2.55:2.2;e.dir=Math.sign(dx)||e.dir;if(e.type==='orc'||e.type==='towerWarrior')addEffect(e.x+e.w/2,e.y+e.h/2,5,.4)}
       if(e.charge>0){e.charge-=dt;e.vx=e.dir*(e.chargeSpeed||245)}
@@ -379,7 +387,7 @@
       const nextX=e.x+e.vx*dt;
       if(nextX<=e.patrolMin||nextX>=e.patrolMax){e.x=clamp(nextX,e.patrolMin,e.patrolMax);e.dir=nextX<=e.patrolMin?1:-1;e.vx=e.dir*Math.max(20,Math.abs(e.vx)*.42);e.charge=0}else e.x=nextX;
 	      e.vx*=Math.pow(.08,dt);const surface=surfaceById(e.surfaceId);if(surface)e.floorY=surfaceTopAt(surface,e.x+e.w/2);e.y=e.floorY-e.h;
-      if(overlap(hero,e)&&e.attackCd<=0){takeDamage(e.attack,e.x+e.w/2);e.attackCd=.9}
+      if(overlap(hero,e)&&e.contactCd<=0){takeDamage(e.attack*(e.charge>0?1.15:1),e.x+e.w/2);e.contactCd=.7}
     }
   }
   function homingTarget(q){const direction=Math.sign(q.vx)||1;let target=null,best=Infinity;for(const e of enemies){if(e.dead)continue;const dx=(e.x+e.w/2-q.x)*direction,dy=e.y+e.h/2-q.y;if(dx<-18||dx>q.homeRadius||Math.abs(dy)>64)continue;const score=dx+Math.abs(dy)*2;if(score<best){best=score;target=e}}return target}
@@ -428,9 +436,10 @@
 	  function drawForestPlatform(p){for(let x=p.x;x<p.x+p.w;x+=48){const sourceX=x===p.x?16:x>=p.x+p.w-48?48:32;ctx.drawImage(assets.forestTiles,sourceX,0,16,16,x,p.y,48,48)}if(p.decor)ctx.drawImage(assets.forestTiles,64,0,16,32,p.x+p.w-72,p.y-96,48,96)}
 	  function drawCaveGround(m){const start=Math.floor((camera.x-48)/48)*48,end=camera.x+viewW+96;for(let x=start;x<end;x+=48){ctx.drawImage(assets.caveTiles,32,0,16,16,x,m.ground,48,48);ctx.drawImage(assets.caveTiles,32,16,16,16,x,m.ground+48,48,48);ctx.drawImage(assets.caveTiles,32,16,16,16,x,m.ground+96,48,48)}}
 	  function drawCavePlatform(p){ctx.drawImage(assets.caveTiles,16,13,16,19,p.x,p.y,48,48);for(let x=p.x+48;x<p.x+p.w-48;x+=48)ctx.drawImage(assets.caveTiles,32,13,16,19,x,p.y,48,48);ctx.drawImage(assets.caveTiles,48,13,16,19,p.x+p.w-48,p.y,48,48)}
-		  function drawHighForestGround(m){const img=assets.highForestTiles;if(!img)return;const s=48,start=Math.floor((camera.x-s)/s)*s,end=camera.x+viewW+s*2;for(let x=start;x<end;x+=s){const cell=Math.floor(x/s),sx=[16,32,48][((cell%3)+3)%3];ctx.drawImage(img,sx,0,16,16,x,m.ground,s,s);ctx.drawImage(img,sx,16,16,16,x,m.ground+s,s,s);ctx.drawImage(img,sx,32,16,16,x,m.ground+s*2,s,s);ctx.drawImage(img,sx,48,16,16,x,m.ground+s*3,s,s)}ctx.fillStyle='rgba(7,13,8,.45)';ctx.fillRect(camera.x,m.ground+s*3,viewW,VIEW_H-m.ground)}
-			  function drawHighForestPlatform(p){const img=assets.highForestTiles;if(!img)return;const s=48,depth=p.tier>=4?3:2;ctx.save();ctx.beginPath();ctx.rect(p.x,p.y,p.w,s*depth);ctx.clip();for(let x=p.x;x<p.x+p.w;x+=s){const cell=Math.floor((x-p.x)/s),last=x+s>=p.x+p.w,sx=hfTopCell(cell,last),mid=sx===64?64:sx===0?0:[16,32,48][cell%3];ctx.drawImage(img,sx,0,16,16,x,p.y,s,s);ctx.drawImage(img,mid,16,16,16,x,p.y+s,s,s);if(depth>2)ctx.drawImage(img,mid,32,16,16,x,p.y+s*2,s,s)}ctx.restore();if(p.decor&&p.y<420)ctx.drawImage(img,256,144,48,80,p.x+p.w-92,p.y+s*depth-12,72,120)}
-			  function drawPreTowerGround(m){const img=assets.preTowerTiles;if(!img)return;const s=64,start=Math.floor((camera.x-s)/s)*s,end=camera.x+viewW+s*2;for(let x=start;x<end;x+=s){const cell=Math.floor(x/s),sx=ptEarthCell(cell,false),rock=224+(((cell%3)+3)%3)*32;ctx.drawImage(img,sx,96,32,32,x,m.ground,s,s);ctx.fillStyle='#090806';ctx.fillRect(x,m.ground+s-2,s,s*2);ctx.drawImage(img,rock,224,32,32,x,m.ground+s-4,s,s);ctx.drawImage(img,rock,288,32,32,x,m.ground+s*2-8,s,s)}ctx.fillStyle='rgba(0,0,0,.42)';ctx.fillRect(camera.x,m.ground+s*3-10,viewW,VIEW_H-m.ground)}
+		  function drawHighForestGround(m){if(m.groundSurfaces?.length){m.groundSurfaces.forEach(drawHighForestPlatform);return}const img=assets.highForestTiles;if(!img)return;const s=64,start=Math.floor((camera.x-s)/s)*s,end=camera.x+viewW+s*2;for(let x=start;x<end;x+=s){const cell=Math.floor(x/s),sx=hfTileSourceX(cell,true);ctx.drawImage(img,sx,0,40,40,x,m.ground,s,s);for(let r=1;r<4;r++)ctx.drawImage(img,cell===0?0:40,[40,120,160][(r-1)%3],40,40,x,m.ground+s*r,s,s)}ctx.fillStyle='rgba(7,13,8,.45)';ctx.fillRect(camera.x,m.ground+s*4,viewW,VIEW_H-m.ground)}
+			  function drawHighForestBridge(p){const img=assets.highForestTiles;if(!img)return;ctx.save();ctx.beginPath();ctx.rect(p.x,p.y,p.w,64);ctx.clip();for(let x=p.x;x<p.x+p.w;x+=128)ctx.drawImage(img,80,80,80,40,x,p.y,128,64);ctx.restore()}
+			  function drawHighForestPlatform(p){const img=assets.highForestTiles;if(!img)return;if(p.oneWay)return drawHighForestBridge(p);const s=64,bodyH=Math.max(s,p.h||s*(p.tier>=4?3:2)),rows=Math.ceil(bodyH/s);ctx.save();ctx.beginPath();ctx.rect(p.x,p.y,p.w,bodyH);ctx.clip();ctx.fillStyle='#17251a';ctx.fillRect(p.x,p.y+24,p.w,bodyH-24);for(let x=p.x;x<p.x+p.w;x+=s){const cell=Math.floor((x-p.x)/s),hasRight=x+s<p.x+p.w-.5,topSx=hfTileSourceX(cell,hasRight),drawX=x-1,drawW=s+2;ctx.drawImage(img,topSx,0,40,40,drawX,p.y,drawW,s);for(let r=1;r<rows;r++){const bottomCap=!p.ground&&r===rows-1,sy=bottomCap?160:[40,120][(r-1)%2],sx=hfTileSourceX(cell,hasRight);ctx.drawImage(img,sx,sy,40,40,drawX,p.y+s*r,drawW,s)}}ctx.restore();if(p.decor&&p.y<420)ctx.drawImage(img,240,144,80,80,p.x+p.w-112,p.y+Math.min(bodyH,160)-96,112,112)}
+			  function drawPreTowerGround(m){if(m.groundSurfaces?.length){m.groundSurfaces.forEach(drawPreTowerPlatform);return}const img=assets.preTowerTiles;if(!img)return;const s=64,start=Math.floor((camera.x-s)/s)*s,end=camera.x+viewW+s*2;for(let x=start;x<end;x+=s){const cell=Math.floor(x/s),sx=ptEarthCell(cell,false),rock=224+(((cell%3)+3)%3)*32;ctx.drawImage(img,sx,96,32,32,x,m.ground,s,s);ctx.fillStyle='#090806';ctx.fillRect(x,m.ground+s-2,s,s*2);ctx.drawImage(img,rock,224,32,32,x,m.ground+s-4,s,s);ctx.drawImage(img,rock,288,32,32,x,m.ground+s*2-8,s,s)}ctx.fillStyle='rgba(0,0,0,.42)';ctx.fillRect(camera.x,m.ground+s*3-10,viewW,VIEW_H-m.ground)}
 			  function drawPreTowerPlatform(p){const img=assets.preTowerTiles;if(!img)return;const s=64;ctx.save();ctx.beginPath();ctx.rect(p.x,p.y,p.w,s+(p.style==='earth'?60:16));ctx.clip();for(let x=p.x;x<p.x+p.w;x+=s){const cell=Math.floor((x-p.x)/s),last=x+s>=p.x+p.w;if(p.style==='earth'){const sx=ptEarthCell(cell,last),rock=224+(cell%3)*32;ctx.drawImage(img,sx,96,32,32,x,p.y,s,s);ctx.fillStyle='#090806';ctx.fillRect(x,p.y+s-3,s,62);ctx.drawImage(img,rock,224,32,32,x,p.y+s-4,s,s)}else{const sx=ptStoneCell(cell,last);ctx.drawImage(img,sx,256,32,32,x,p.y,s,s);ctx.fillStyle='rgba(11,11,12,.72)';ctx.fillRect(x,p.y+s-3,s,19)}}ctx.restore();if(p.style!=='earth'&&(p.decor||p.w>340)){const supportX=snap(p.x+p.w/2-32,64);ctx.drawImage(img,160,288,32,64,supportX,p.y+s-2,64,128)}}
 	  function drawDarkGround(m){ctx.save();ctx.filter='brightness(.68) saturate(.75) hue-rotate(-26deg)';drawForestGround(m);ctx.restore();ctx.fillStyle='rgba(5,3,8,.35)';ctx.fillRect(0,m.ground+45,m.width,VIEW_H-m.ground)}
   function drawDarkPlatform(p){ctx.save();ctx.filter='brightness(.68) saturate(.75) hue-rotate(-26deg)';drawForestPlatform(p);ctx.restore()}
