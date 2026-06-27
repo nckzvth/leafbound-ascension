@@ -1,0 +1,12 @@
+source=ruins.aseprite
+canvas=1120x515
+order=bottom-to-top
+
+00-parallax-bg-2.png	parallax bg 2
+01-parallax-bg-1.png	parallax bg 1
+02-rear-bg1-no-collision.png	rear bg1 no collision
+03-rear-decor-no-collision.png	rear decor no collision
+04-rear-brush-no-collision.png	rear brush no collision
+05-walkable-surfaces.png	Walkable surfaces
+06-front-brush-no-collision.png	Front brush no collision
+07-front-decor-no-collision.png	Front Decor no collision
